@@ -1068,7 +1068,8 @@ preInlineUnconditionally dflags env top_lvl bndr rhs
   | otherwise = case idOccInfo bndr of
                   IAmDead                    -> True -- Happens in ((\x.1) v)
                   occ@OneOcc { occ_one_br = True }
-                                             -> try_once (occ_in_lam occ)
+                             | isJoinId bndr -> True
+                             | otherwise     -> try_once (occ_in_lam occ)
                                                          (occ_int_cxt occ)
                   _                          -> False
   where
