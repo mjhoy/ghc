@@ -53,6 +53,7 @@ import Util
 import ErrUtils
 import Module          ( moduleName, pprModuleName )
 
+
 {-
 The guts of the simplifier is in this module, but the driver loop for
 the simplifier is in SimplCore.hs.
@@ -440,8 +441,8 @@ simplJoinBind :: SimplEnv
               -> InExpr -> SimplEnv     -- The RHS and its environment
               -> SimplM SimplEnv
 simplJoinBind env is_rec cont bndr bndr1 rhs rhs_se
-  = -- pprTrace "simplLazyBind" ((ppr bndr <+> ppr bndr1) $$
-    --                           ppr rhs $$ ppr (seIdSubst rhs_se)) $
+  = -- pprTrace "simplJoinBind" ((ppr bndr <+> ppr bndr1) $$
+    --                          ppr rhs $$ ppr (seIdSubst rhs_se)) $
     do  { let rhs_env = rhs_se `setInScopeAndZapFloats` env
         ; rhs' <- simplJoinRhs rhs_env bndr rhs cont
         ; completeBind env NotTopLevel is_rec (Just cont) bndr bndr1 rhs' }
@@ -3353,6 +3354,8 @@ simplLetUnfolding :: SimplEnv-> TopLevelFlag
 simplLetUnfolding env top_lvl cont_mb id new_rhs unf
   | isStableUnfolding unf
   = simplUnfolding env top_lvl cont_mb id unf
+  | isExitJoinId id -- Do not inline exit join points
+  = return unf
   | otherwise
   = is_bottoming `seq`  -- See Note [Force bottoming field]
     do { dflags <- getDynFlags

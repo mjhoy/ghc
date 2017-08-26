@@ -1065,6 +1065,7 @@ preInlineUnconditionally dflags env top_lvl bndr rhs
   | isTopLevel top_lvl && isBottomingId bndr = False -- Note [Top-level bottoming Ids]
   | not (gopt Opt_SimplPreInlining dflags)   = False
   | isCoVar bndr                             = False -- Note [Do not inline CoVars unconditionally]
+  | isExitJoinId bndr                        = False
   | otherwise = case idOccInfo bndr of
                   IAmDead                    -> True -- Happens in ((\x.1) v)
                   occ@OneOcc { occ_one_br = True }

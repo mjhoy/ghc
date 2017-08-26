@@ -43,6 +43,7 @@ import Specialise       ( specProgram)
 import SpecConstr       ( specConstrProgram)
 import DmdAnal          ( dmdAnalProgram )
 import CallArity        ( callArityAnalProgram )
+import Exitify          ( exitifyProgram )
 import WorkWrap         ( wwTopBinds )
 import Vectorise        ( vectorise )
 import SrcLoc
@@ -243,6 +244,8 @@ getCoreToDo dflags
 
         -- initial simplify: mk specialiser happy: minimum effort please
         simpl_gently,
+
+        CoreDoExitify,
 
         -- Specialisation is best done before full laziness
         -- so that overloaded functions have all their dictionary lambdas manifest
@@ -472,6 +475,9 @@ doCorePass CoreDoStaticArgs          = {-# SCC "StaticArgs" #-}
 
 doCorePass CoreDoCallArity           = {-# SCC "CallArity" #-}
                                        doPassD callArityAnalProgram
+
+doCorePass CoreDoExitify             = {-# SCC "Exitify" #-}
+                                       doPass exitifyProgram
 
 doCorePass CoreDoStrictness          = {-# SCC "NewStranal" #-}
                                        doPassDFM dmdAnalProgram

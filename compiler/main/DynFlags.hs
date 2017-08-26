@@ -360,6 +360,7 @@ data DumpFlag
    | Opt_D_dump_prep
    | Opt_D_dump_stg
    | Opt_D_dump_call_arity
+   | Opt_D_dump_exitify
    | Opt_D_dump_stranal
    | Opt_D_dump_str_signatures
    | Opt_D_dump_tc
@@ -2995,6 +2996,8 @@ dynamic_flags_deps = [
         (setDumpFlag Opt_D_dump_stg)
   , make_ord_flag defGhcFlag "ddump-call-arity"
         (setDumpFlag Opt_D_dump_call_arity)
+  , make_ord_flag defGhcFlag "ddump-exitify"
+        (setDumpFlag Opt_D_dump_exitify)
   , make_ord_flag defGhcFlag "ddump-stranal"
         (setDumpFlag Opt_D_dump_stranal)
   , make_ord_flag defGhcFlag "ddump-str-signatures"
