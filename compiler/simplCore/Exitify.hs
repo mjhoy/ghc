@@ -25,36 +25,45 @@ import Control.Monad
 exitifyProgram :: CoreProgram -> CoreProgram
 exitifyProgram binds = map goTopLvl binds
   where
-    goTopLvl (NonRec v e) = NonRec v (go e)
-    goTopLvl (Rec pairs) = Rec (map (second go) pairs)
+    goTopLvl (NonRec v e) = NonRec v (go in_scope_toplvl e)
+    goTopLvl (Rec pairs) = Rec (map (second (go in_scope_toplvl)) pairs)
 
-    go e@(Var{})       = e
-    go e@(Lit {})      = e
-    go e@(Type {})     = e
-    go e@(Coercion {}) = e
+    in_scope_toplvl = emptyInScopeSet `extendInScopeSetList` bindersOfBinds binds
 
-    go (Lam v e')  = Lam v (go e')
-    go (App e1 e2) = App (go e1) (go e2)
-    go (Case scrut bndr ty alts) = Case (go scrut) bndr ty (map goAlt alts)
-    go (Cast e' c) = Cast (go e') c
-    go (Tick t e') = Tick t (go e')
-    go (Let bind body) = goBind bind (go body)
+    go :: InScopeSet -> CoreExpr -> CoreExpr
+    go _ e@(Var{})       = e
+    go _ e@(Lit {})      = e
+    go _ e@(Type {})     = e
+    go _ e@(Coercion {}) = e
 
-    goAlt :: CoreAlt -> CoreAlt
-    goAlt (dc, pats, rhs) = (dc, pats, go rhs)
+    go in_scope (Lam v e')  = Lam v (go in_scope' e')
+      where in_scope' = in_scope `extendInScopeSet` v
+    go in_scope (App e1 e2) = App (go in_scope e1) (go in_scope e2)
+    go in_scope (Case scrut bndr ty alts)
+        = Case (go in_scope scrut) bndr ty (map (goAlt in_scope') alts)
+      where in_scope' = in_scope `extendInScopeSet` bndr
+    go in_scope (Cast e' c) = Cast (go in_scope e') c
+    go in_scope (Tick t e') = Tick t (go in_scope e')
+    go in_scope (Let bind body) = goBind in_scope bind (go in_scope' body)
+      where in_scope' = in_scope `extendInScopeSetList` bindersOf bind
 
-    goBind :: CoreBind -> (CoreExpr -> CoreExpr)
-    goBind (NonRec v rhs) = Let (NonRec v (go rhs))
-    goBind (Rec pairs)
-        | is_join_rec = exitify pairs'
+    goAlt :: InScopeSet -> CoreAlt -> CoreAlt
+    goAlt in_scope (dc, pats, rhs) = (dc, pats, go in_scope' rhs)
+      where in_scope' = in_scope `extendInScopeSetList` pats
+
+    goBind :: InScopeSet -> CoreBind -> (CoreExpr -> CoreExpr)
+    goBind in_scope (NonRec v rhs) = Let (NonRec v (go in_scope rhs))
+    goBind in_scope (Rec pairs)
+        | is_join_rec = exitify in_scope' pairs'
         | otherwise   = Let (Rec pairs')
-      where pairs' = map (second go) pairs
+      where pairs' = map (second (go in_scope')) pairs
             is_join_rec = any (isJoinId . fst) pairs
+            in_scope' = in_scope `extendInScopeSetList` bindersOf (Rec pairs)
 
 -- | Given a recursive group of a joinrec, identifies “exit paths” and binds them as
 -- join-points outside the joinrec.
-exitify :: [(Var,CoreExpr)] -> (CoreExpr -> CoreExpr)
-exitify pairs =
+exitify :: InScopeSet -> [(Var,CoreExpr)] -> (CoreExpr -> CoreExpr)
+exitify in_scope pairs =
     ASSERT (all (isJoinId . fst) pairs)
     \body ->mkExitLets exits (mkLetRec pairs' body)
   where
@@ -65,8 +74,6 @@ exitify pairs =
     -- annotate the AST with them
     ann_pairs = map (second freeVars) pairs
 
-    -- What is in scope on the top level?
-    joinrec_fv = unionVarSets $ map (dVarSetToVarSet . freeVarsOf . snd) ann_pairs
     -- Which are the recursive calls?
     recursive_calls = mkVarSet $ map fst pairs
 
@@ -137,10 +144,10 @@ exitify pairs =
     --  * any exit join points created so far.
     mkExitJoinId ty join_arity captured = do
         fs <- get
-        let avoid = joinrec_fv `unionVarSet` mkVarSet captured
-                               `unionVarSet` mkVarSet (map fst fs)
-                               `extendVarSet` exit_id_tmpl -- just cosmetics
-        return (uniqAway (mkInScopeSet avoid) exit_id_tmpl)
+        let avoid = in_scope `extendInScopeSetList` captured
+                             `extendInScopeSetList` (map fst fs)
+                             `extendInScopeSet` exit_id_tmpl -- just cosmetics
+        return (uniqAway avoid exit_id_tmpl)
       where
         exit_id_tmpl = mkSysLocal (fsLit "exit") initExitJoinUnique ty
                         `asJoinId` join_arity
