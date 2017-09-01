@@ -3354,8 +3354,9 @@ simplLetUnfolding :: SimplEnv-> TopLevelFlag
 simplLetUnfolding env top_lvl cont_mb id new_rhs unf
   | isStableUnfolding unf
   = simplUnfolding env top_lvl cont_mb id unf
-  | isExitJoinId id -- Do not inline exit join points
-  = return unf
+  | sm_preserve_exit_joins (getMode env)
+  , isExitJoinId id
+  = return unf -- Do not inline exit join points
   | otherwise
   = is_bottoming `seq`  -- See Note [Force bottoming field]
     do { dflags <- getDynFlags
